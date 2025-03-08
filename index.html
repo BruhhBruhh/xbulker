@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XENFT Minter for Base Chain</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.8.2/web3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-2xl mx-auto">
+            <header class="mb-8 text-center">
+                <h1 class="text-4xl font-bold text-blue-400 mb-2">XENFT Torrent Minter</h1>
+                <p class="text-gray-400">Mint multiple XENFTs on Base Chain with a single click</p>
+            </header>
+
+            <!-- Wallet Connection -->
+            <div class="bg-gray-800 rounded-lg p-6 mb-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">Wallet Connection</h2>
+                    <button id="connectWalletBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition">
+                        Connect Wallet
+                    </button>
+                </div>
+                <div id="walletInfo" class="mt-4 hidden">
+                    <div class="flex justify-between items-center p-3 bg-gray-700 rounded-md">
+                        <div>
+                            <span class="text-gray-400">Connected Address:</span>
+                            <span id="walletAddress" class="ml-2 font-mono text-sm"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400">Balance:</span>
+                            <span id="walletBalance" class="ml-2"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Minting Configuration -->
+            <div class="bg-gray-800 rounded-lg p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Minting Configuration</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label for="numberOfTokens" class="block text-gray-400 mb-1">Number of XENFTs to Mint</label>
+                        <input type="number" id="numberOfTokens" value="100" min="1" max="100" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white">
+                    </div>
+                    <div>
+                        <label for="vmuCount" class="block text-gray-400 mb-1">VMUs per XENFT</label>
+                        <input type="number" id="vmuCount" value="145" min="1" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white">
+                    </div>
+                    <div>
+                        <label for="termDays" class="block text-gray-400 mb-1">Term Days</label>
+                        <input type="number" id="termDays" value="505" min="1" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white">
+                    </div>
+                    <div>
+                        <label for="delaySeconds" class="block text-gray-400 mb-1">Delay Between Mints (seconds)</label>
+                        <input type="number" id="delaySeconds" value="5" min="1" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white">
+                    </div>
+                    <div>
+                        <label for="gasPrice" class="block text-gray-400 mb-1">Gas Price (Gwei, leave empty for auto)</label>
+                        <input type="text" id="gasPrice" placeholder="Auto" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white">
+                    </div>
+                    <div>
+                        <label for="gasLimit" class="block text-gray-400 mb-1">Gas Limit (leave empty for default)</label>
+                        <input type="number" id="gasLimit" placeholder="5000000" 
+                            class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white">
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <button id="startMintingBtn" disabled class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-md transition disabled:bg-gray-600 disabled:cursor-not-allowed">
+                        Start Minting
+                    </button>
+                </div>
+            </div>
+
+            <!-- Minting Progress -->
+            <div id="mintingProgress" class="bg-gray-800 rounded-lg p-6 mb-6 hidden">
+                <h2 class="text-xl font-semibold mb-4">Minting Progress</h2>
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm text-gray-400 mb-1">
+                        <span>Progress:</span>
+                        <span id="progressCounter">0/0</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-4">
+                        <div id="progressBar" class="bg-green-500 h-4 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Successful:</span>
+                        <span id="successCount">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Failed:</span>
+                        <span id="failedCount">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">ETH Spent:</span>
+                        <span id="ethSpent">0 ETH</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Time Elapsed:</span>
+                        <span id="timeElapsed">00:00:00</span>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button id="stopMintingBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition">
+                        Stop Minting
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transaction Log -->
+            <div id="transactionLog" class="bg-gray-800 rounded-lg p-6 hidden">
+                <h2 class="text-xl font-semibold mb-4">Transaction Log</h2>
+                <div class="overflow-y-auto max-h-64">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">#</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Transaction Hash</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionTable" class="divide-y divide-gray-700 text-sm">
+                            <!-- Transaction entries will be added here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 text-center">
+                    <button id="downloadLogBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition">
+                        Download Log
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // XENFT Contract Address and ABI
+        const XENFT_CONTRACT_ADDRESS = "0x379002701BF6f2862e3dFdd1f96d3C5E1BF450B6";
+        const XENFT_ABI = [
+            {
+                "inputs": [
+                    {"internalType": "uint256", "name": "count", "type": "uint256"},
+                    {"internalType": "uint256", "name": "term", "type": "uint256"}
+                ],
+                "name": "bulkClaimRank",
+                "outputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "ownedTokens",
+                "outputs": [{"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+
+        // Base Chain Configuration
+        const BASE_CHAIN_ID = 8453;
+        const BASE_CHAIN_CONFIG = {
+            chainId: '0x' + BASE_CHAIN_ID.toString(16),
+            chainName: 'Base Mainnet',
+            nativeCurrency: {
+                name: 'ETH',
+                symbol: 'ETH',
+                decimals: 18
+            },
+            rpcUrls: ['https://mainnet.base.org'],
+            blockExplorerUrls: ['https://basescan.org']
+        };
+
+        // Global Variables
+        let currentAccount = null;
+        let provider = null;
+        let signer = null;
+        let contract = null;
+        let web3 = null;
+        let mintingActive = false;
+        let mintingCancelled = false;
+        let startTime = 0;
+        let timerInterval = null;
+        let initialBalance = 0;
+        let transactionLog = [];
+        let successCount = 0;
+        let failedCount = 0;
+
+        // DOM Elements
+        const connectWalletBtn = document.getElementById('connectWalletBtn');
+        const walletInfo = document.getElementById('walletInfo');
+        const walletAddress = document.getElementById('walletAddress');
+        const walletBalance = document.getElementById('walletBalance');
+        const startMintingBtn = document.getElementById('startMintingBtn');
+        const stopMintingBtn = document.getElementById('stopMintingBtn');
+        const downloadLogBtn = document.getElementById('downloadLogBtn');
+        const mintingProgress = document.getElementById('mintingProgress');
+        const transactionLogSection = document.getElementById('transactionLog');
+        const progressBar = document.getElementById('progressBar');
+        const progressCounter = document.getElementById('progressCounter');
+        const successCountElement = document.getElementById('successCount');
+        const failedCountElement = document.getElementById('failedCount');
+        const ethSpent = document.getElementById('ethSpent');
+        const timeElapsed = document.getElementById('timeElapsed');
+        const transactionTable = document.getElementById('transactionTable');
+
+        // Input Elements
+        const numberOfTokens = document.getElementById('numberOfTokens');
+        const vmuCount = document.getElementById('vmuCount');
+        const termDays = document.getElementById('termDays');
+        const delaySeconds = document.getElementById('delaySeconds');
+        const gasPrice = document.getElementById('gasPrice');
+        const gasLimit = document.getElementById('gasLimit');
+
+        // Check if MetaMask is installed
+        async function checkMetaMaskInstalled() {
+            if (window.ethereum) {
+                try {
+                    // Create Web3 instance
+                    web3 = new Web3(window.ethereum);
+                    
+                    // Create ethers provider
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    
+                    // Request accounts access
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    
+                    // Setup event listeners
+                    window.ethereum.on('accountsChanged', handleAccountsChanged);
+                    window.ethereum.on('chainChanged', handleChainChanged);
+                    
+                    // Get current accounts
+                    const accounts = await provider.listAccounts();
+                    handleAccountsChanged(accounts);
+                    
+                    // Check if we're on Base chain
+                    await checkAndSwitchToBaseChain();
+                    
+                    return true;
+                } catch (error) {
+                    console.error("Error connecting to MetaMask:", error);
+                    alert("Error connecting to MetaMask. Please make sure it's unlocked and try again.");
+                    return false;
+                }
+            } else {
+                alert("MetaMask is not installed. Please install MetaMask to use this application.");
+                return false;
+            }
+        }
+
+        // Switch to Base Chain if needed
+        async function checkAndSwitchToBaseChain() {
+            try {
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                if (chainId !== BASE_CHAIN_CONFIG.chainId) {
+                    try {
+                        // Try to switch to Base chain
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: BASE_CHAIN_CONFIG.chainId }],
+                        });
+                    } catch (switchError) {
+                        // If chain hasn't been added to MetaMask, add it
+                        if (switchError.code === 4902) {
+                            try {
+                                await window.ethereum.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [BASE_CHAIN_CONFIG],
+                                });
+                            } catch (addError) {
+                                console.error("Error adding Base chain:", addError);
+                            }
+                        } else {
+                            console.error("Error switching to Base chain:", switchError);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error checking chain:", error);
+            }
+        }
+
+        // Handle account changes
+        async function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                currentAccount = null;
+                walletInfo.classList.add('hidden');
+                startMintingBtn.disabled = true;
+                connectWalletBtn.textContent = "Connect Wallet";
+            } else if (accounts[0] !== currentAccount) {
+                currentAccount = accounts[0];
+                
+                // Update UI with account info
+                walletInfo.classList.remove('hidden');
+                walletAddress.textContent = `${currentAccount.substring(0, 6)}...${currentAccount.substring(38)}`;
+                startMintingBtn.disabled = false;
+                connectWalletBtn.textContent = "Wallet Connected";
+
+                // Update contract instance with signer
+                signer = provider.getSigner();
+                contract = new ethers.Contract(XENFT_CONTRACT_ADDRESS, XENFT_ABI, signer);
+                
+                // Update balance
+                await updateBalance();
+            }
+        }
+
+        // Handle chain changes
+        function handleChainChanged(_chainId) {
+            // Reload the page when the chain changes
+            window.location.reload();
+        }
+
+        // Update wallet balance
+        async function updateBalance() {
+            if (currentAccount) {
+                try {
+                    const balance = await provider.getBalance(currentAccount);
+                    const balanceInEth = ethers.utils.formatEther(balance);
+                    walletBalance.textContent = `${parseFloat(balanceInEth).toFixed(4)} ETH`;
+                    return balance;
+                } catch (error) {
+                    console.error("Error getting balance:", error);
+                    walletBalance.textContent = "Error";
+                    return 0;
+                }
+            }
+        }
+
+        // Format time for display (HH:MM:SS)
+        function formatTime(seconds) {
+            const hrs = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Update timer
+        function updateTimer() {
+            if (startTime === 0) return;
+            
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000);
+            timeElapsed.textContent = formatTime(elapsed);
+        }
+
+        // Add transaction to log
+        function addTransactionToLog(index, hash, status) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-2">${index}</td>
+                <td class="px-4 py-2">
+                    <a href="https://basescan.org/tx/${hash}" target="_blank" 
+                       class="text-blue-400 hover:text-blue-300">
+                        ${hash.substring(0, 8)}...${hash.substring(58)}
+                    </a>
+                </td>
+                <td class="px-4 py-2">
+                    <span class="px-2 py-1 rounded text-xs font-medium 
+                        ${status === 'Success' ? 'bg-green-900 text-green-300' : 
+                          status === 'Failed' ? 'bg-red-900 text-red-300' : 
+                          'bg-yellow-900 text-yellow-300'}">
+                        ${status}
+                    </span>
+                </td>
+            `;
+            transactionTable.appendChild(tr);
+            
+            // Auto-scroll to bottom
+            transactionTable.parentElement.scrollTop = transactionTable.parentElement.scrollHeight;
+            
+            // Add to log array
+            transactionLog.push({
+                index,
+                hash,
+                status,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Update progress UI
+        function updateProgress(current, total) {
+            const percentage = Math.floor((current / total) * 100);
+            progressBar.style.width = `${percentage}%`;
+            progressCounter.textContent = `${current}/${total}`;
+            successCountElement.textContent = successCount;
+            failedCountElement.textContent = failedCount;
+        }
+
+        // Calculate ETH spent
+        async function calculateEthSpent() {
+            if (initialBalance > 0) {
+                const currentBalance = await provider.getBalance(currentAccount);
+                const spent = initialBalance - currentBalance;
+                ethSpent.textContent = `${parseFloat(ethers.utils.formatEther(spent)).toFixed(6)} ETH`;
+            }
+        }
+
+        // Mint a single XENFT
+        async function mintSingleXENFT(params) {
+            try {
+                const txOptions = {};
+                
+                // Set gas limit if provided
+                if (params.gasLimit && params.gasLimit > 0) {
+                    txOptions.gasLimit = params.gasLimit;
+                }
+                
+                // Set gas price if provided
+                if (params.gasPrice && params.gasPrice !== '') {
+                    txOptions.gasPrice = ethers.utils.parseUnits(params.gasPrice, 'gwei');
+                }
+                
+                // Call the contract function
+                const tx = await contract.bulkClaimRank(
+                    params.vmuCount,
+                    params.termDays,
+                    txOptions
+                );
+                
+                addTransactionToLog(params.index, tx.hash, 'Pending');
+                
+                // Wait for transaction to be mined
+                const receipt = await tx.wait();
+                
+                if (receipt.status === 1) {
+                    // Success
+                    successCount++;
+                    addTransactionToLog(params.index, tx.hash, 'Success');
+                    return true;
+                } else {
+                    // Failed
+                    failedCount++;
+                    addTransactionToLog(params.index, tx.hash, 'Failed');
+                    return false;
+                }
+            } catch (error) {
+                console.error(`Error minting XENFT #${params.index}:`, error);
+                failedCount++;
+                addTransactionToLog(params.index, 'Error', 'Failed');
+                return false;
+            }
+        }
+
+        // Batch mint XENFTs
+        async function batchMintXENFTs() {
+            if (mintingActive) return;
+            
+            mintingActive = true;
+            mintingCancelled = false;
+            successCount = 0;
+            failedCount = 0;
+            transactionLog = [];
+            transactionTable.innerHTML = '';
+            
+            // Get parameters
+            const count = parseInt(numberOfTokens.value, 10);
+            const vmus = parseInt(vmuCount.value, 10);
+            const term = parseInt(termDays.value, 10);
+            const delay = parseInt(delaySeconds.value, 10) * 1000; // Convert to milliseconds
+            const gas = gasPrice.value.trim();
+            const limit = gasLimit.value.trim() ? parseInt(gasLimit.value.trim(), 10) : 0;
+            
+            // Validate inputs
+            if (isNaN(count) || count < 1 || isNaN(vmus) || vmus < 1 || isNaN(term) || term < 1) {
+                alert("Please enter valid values for the number of tokens, VMUs, and term days.");
+                mintingActive = false;
+                return;
+            }
+            
+            // Show progress section
+            mintingProgress.classList.remove('hidden');
+            transactionLogSection.classList.remove('hidden');
+            
+            // Reset and start timer
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            // Get initial balance
+            initialBalance = await updateBalance();
+            
+            // Update UI for starting state
+            updateProgress(0, count);
+            
+            // Loop through and mint XENFTs
+            for (let i = 0; i < count; i++) {
+                if (mintingCancelled) {
+                    console.log("Minting cancelled by user");
+                    break;
+                }
+                
+                const params = {
+                    index: i + 1,
+                    vmuCount: vmus,
+                    termDays: term,
+                    gasPrice: gas,
+                    gasLimit: limit
+                };
+                
+                await mintSingleXENFT(params);
+                
+                // Update progress
+                updateProgress(i + 1, count);
+                await calculateEthSpent();
+                
+                // Wait for delay before next mint (if not the last one)
+                if (i < count - 1 && !mintingCancelled) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+            
+            // Finalize
+            clearInterval(timerInterval);
+            mintingActive = false;
+            alert(`Minting completed. Success: ${successCount}, Failed: ${failedCount}`);
+        }
+
+        // Download transaction log as JSON
+        function downloadTransactionLog() {
+            if (transactionLog.length === 0) {
+                alert("No transactions to download");
+                return;
+            }
+            
+            const data = {
+                timestamp: new Date().toISOString(),
+                wallet: currentAccount,
+                results: {
+                    total: transactionLog.length,
+                    successful: successCount,
+                    failed: failedCount
+                },
+                transactions: transactionLog
+            };
+            
+            const dataStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `xenft-transactions-${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // Event Listeners
+        connectWalletBtn.addEventListener('click', checkMetaMaskInstalled);
+        startMintingBtn.addEventListener('click', batchMintXENFTs);
+        stopMintingBtn.addEventListener('click', () => {
+            mintingCancelled = true;
+            alert("Minting will stop after the current transaction completes.");
+        });
+        downloadLogBtn.addEventListener('click', downloadTransactionLog);
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Auto-connect if MetaMask is already connected
+            if (window.ethereum && window.ethereum.isConnected()) {
+                checkMetaMaskInstalled();
+            }
+        });
+    </script>
+</body>
+</html>
